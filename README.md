@@ -6,7 +6,7 @@ An independent third-party Deriv market dashboard. This project is not affiliate
 
 Open [derivnova.html](./derivnova.html) on GitHub Pages or serve the repository as a static site. The preview connects to Deriv's public WebSocket endpoint for live market ticks only.
 
-- Displays four synthetic market tick streams.
+- Displays 12 volatility index choices across standard and one-second variants.
 - Shows the requested manual contract categories and types as a UI preview.
 - Does not authenticate, request account balance, request a contract proposal, or place trades.
 - Does not ask for or store API tokens.
