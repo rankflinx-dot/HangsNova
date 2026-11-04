@@ -1,0 +1,181 @@
+<xml xmlns="https://developers.google.com/blockly/xml" is_dbot="true" collection="false">
+  <variables>
+    <variable id="hedge_var_initial_stake">Initial stake</variable>
+    <variable id="hedge_var_martingale">Martingale</variable>
+    <variable id="hedge_var_stake">Stake</variable>
+  </variables>
+  <block type="trade_definition" id="hedge_trade_definition" deletable="false" x="0" y="60">
+    <statement name="TRADE_OPTIONS">
+      <block type="trade_definition_market" id="hedge_market" deletable="false" movable="false">
+        <mutation xmlns="http://www.w3.org/1999/xhtml" has_change_after="false" has_trades_input="false"></mutation>
+        <field name="MARKET_LIST">synthetic_index</field>
+        <field name="SUBMARKET_LIST">random_index</field>
+        <field name="SYMBOL_LIST">1HZ100V</field>
+        <field name="TRADE_ALL_VOLATILITY">FALSE</field>
+        <field name="MULTI_CONTRACT_SWITCHING">FALSE</field>
+        <next>
+          <block type="trade_definition_tradetype" id="hedge_tradetype" deletable="false" movable="false">
+            <field name="TRADETYPECAT_LIST">callput</field>
+            <field name="TRADETYPE_LIST">higherlower</field>
+            <next>
+              <block type="trade_definition_contracttype" id="hedge_contracttype" deletable="false" movable="false">
+                <field name="TYPE_LIST">both</field>
+                <next>
+                  <block type="trade_definition_candleinterval" id="hedge_candleinterval" deletable="false" movable="false">
+                    <field name="CANDLEINTERVAL_LIST">60</field>
+                    <next>
+                      <block type="trade_definition_restartbuysell" id="hedge_restartbuysell" deletable="false" movable="false">
+                        <field name="TIME_MACHINE_ENABLED">FALSE</field>
+                        <next>
+                          <block type="trade_definition_restartonerror" id="hedge_restartonerror" deletable="false" movable="false">
+                            <field name="RESTARTONERROR">TRUE</field>
+                          </block>
+                        </next>
+                      </block>
+                    </next>
+                  </block>
+                </next>
+              </block>
+            </next>
+          </block>
+        </next>
+      </block>
+    </statement>
+    <statement name="INITIALIZATION">
+      <block type="variables_set" id="hedge_init_initial_stake">
+        <field name="VAR" id="hedge_var_initial_stake">Initial stake</field>
+        <value name="VALUE">
+          <block type="math_number" id="hedge_init_initial_stake_value">
+            <field name="NUM">1</field>
+          </block>
+        </value>
+        <next>
+          <block type="variables_set" id="hedge_init_martingale">
+            <field name="VAR" id="hedge_var_martingale">Martingale</field>
+            <value name="VALUE">
+              <block type="math_number" id="hedge_init_martingale_value">
+                <field name="NUM">2</field>
+              </block>
+            </value>
+            <next>
+              <block type="variables_set" id="hedge_init_stake">
+                <field name="VAR" id="hedge_var_stake">Stake</field>
+                <value name="VALUE">
+                  <block type="variables_get" id="hedge_init_stake_value">
+                    <field name="VAR" id="hedge_var_initial_stake">Initial stake</field>
+                  </block>
+                </value>
+              </block>
+            </next>
+          </block>
+        </next>
+      </block>
+    </statement>
+    <statement name="SUBMARKET">
+      <block type="trade_definition_tradeoptions" id="hedge_tradeoptions">
+        <mutation xmlns="http://www.w3.org/1999/xhtml" has_first_barrier="true" has_second_barrier="false" has_prediction="false"></mutation>
+        <field name="DURATIONTYPE_LIST">t</field>
+        <field name="BARRIEROFFSETTYPE_LIST">+</field>
+        <value name="DURATION">
+          <shadow type="math_number_positive" id="hedge_duration">
+            <field name="NUM">1</field>
+          </shadow>
+        </value>
+        <value name="AMOUNT">
+          <shadow type="math_number_positive" id="hedge_amount_shadow">
+            <field name="NUM">1</field>
+          </shadow>
+          <block type="variables_get" id="hedge_amount">
+            <field name="VAR" id="hedge_var_stake">Stake</field>
+          </block>
+        </value>
+        <value name="BARRIEROFFSET">
+          <shadow type="math_number_positive" id="9AJyfHQ{HJuB18=a(rbt" inline="true">
+            <field name="NUM">0.61</field>
+          </shadow>
+        </value>
+      </block>
+    </statement>
+  </block>
+  <block type="after_purchase" id="hedge_after_purchase" x="779" y="60">
+    <statement name="AFTERPURCHASE_STACK">
+      <block type="controls_if" id="hedge_martingale_if">
+        <mutation xmlns="http://www.w3.org/1999/xhtml" else="1"></mutation>
+        <value name="IF0">
+          <block type="contract_check_result" id="hedge_check_result">
+            <field name="CHECK_RESULT">win</field>
+          </block>
+        </value>
+        <statement name="DO0">
+          <block type="variables_set" id="hedge_reset_stake">
+            <field name="VAR" id="hedge_var_stake">Stake</field>
+            <value name="VALUE">
+              <block type="variables_get" id="hedge_reset_stake_value">
+                <field name="VAR" id="hedge_var_initial_stake">Initial stake</field>
+              </block>
+            </value>
+          </block>
+        </statement>
+        <statement name="ELSE">
+          <block type="variables_set" id="hedge_raise_stake">
+            <field name="VAR" id="hedge_var_stake">Stake</field>
+            <value name="VALUE">
+              <block type="math_arithmetic" id="hedge_raise_stake_value">
+                <field name="OP">MULTIPLY</field>
+                <value name="A">
+                  <shadow type="math_number" id="hedge_raise_a_shadow">
+                    <field name="NUM">1</field>
+                  </shadow>
+                  <block type="variables_get" id="hedge_raise_a">
+                    <field name="VAR" id="hedge_var_stake">Stake</field>
+                  </block>
+                </value>
+                <value name="B">
+                  <shadow type="math_number" id="hedge_raise_b_shadow">
+                    <field name="NUM">1</field>
+                  </shadow>
+                  <block type="variables_get" id="hedge_raise_b">
+                    <field name="VAR" id="hedge_var_martingale">Martingale</field>
+                  </block>
+                </value>
+              </block>
+            </value>
+          </block>
+        </statement>
+        <next>
+          <block type="trade_again" id="hedge_trade_again"></block>
+        </next>
+      </block>
+    </statement>
+  </block>
+  <block type="platform_signature" id="hedge_platform_signature" deletable="false" x="779" y="470"></block>
+  <block type="before_purchase" id="hedge_before_purchase" deletable="false" x="0" y="868">
+    <field name="IS_BOT_PROTECTED">FALSE</field>
+    <statement name="BEFOREPURCHASE_STACK">
+      <block type="hedge_purchase" id="hedge_purchase_block">
+        <field name="FIRST_CONTRACT_TYPE">CALL</field>
+        <field name="SECOND_CONTRACT_TYPE">PUT</field>
+        <value name="FIRST_BARRIER_OFFSET">
+          <shadow type="math_number" id="vb(/N%@|=g{V*El=#4De" inline="true">
+            <field name="NUM">0.61</field>
+          </shadow>
+        </value>
+        <value name="FIRST_PREDICTION">
+          <shadow type="math_number_positive" id="qDHOS.%rL#c;8v9NlZ/#" inline="true">
+            <field name="NUM">5</field>
+          </shadow>
+        </value>
+        <value name="SECOND_BARRIER_OFFSET">
+          <shadow type="math_number" id="f7[55x*GMIVB2~Q.JfY(" inline="true">
+            <field name="NUM">0.61</field>
+          </shadow>
+        </value>
+        <value name="SECOND_PREDICTION">
+          <shadow type="math_number_positive" id="15gZAx1Hu%s!`*{8V7nq" inline="true">
+            <field name="NUM">4</field>
+          </shadow>
+        </value>
+      </block>
+    </statement>
+  </block>
+</xml>
