@@ -35,6 +35,26 @@
 </div>
 <footer class="footer"><span>© <span id="year"></span> NovaRank · Independent third-party workspace</span><span>Not affiliated with Deriv. Trading involves risk and losses are possible.</span></footer>
 </main><div class="toast" id="toast"></div>
+
+<dialog id="authDialog" style="border:0;border-radius:14px;padding:0;width:min(440px,calc(100% - 28px));box-shadow:0 24px 80px #06132166;color:#14283a">
+ <div style="padding:20px;background:#fff">
+  <div style="display:flex;justify-content:space-between;align-items:center"><h2 style="margin:0">Connect Deriv account</h2><button class="btn" id="closeAuth" style="background:#edf2f5">✕</button></div>
+  <p class="muted" style="margin:8px 0 16px">Choose how you want to authorize NovaRank. Your Deriv password is never requested.</p>
+  <div style="border:1px solid #dce5eb;border-radius:10px;padding:14px;margin-bottom:12px">
+   <b>Option 1 · Login with Deriv</b><p class="muted">Continue to Deriv to sign in and approve access. NovaRank will use the permissions you authorize.</p>
+   <button class="btn connect" id="oauthConnect" style="width:100%" disabled>Continue with Deriv · Setup pending</button>
+  </div>
+  <div style="border:1px solid #dce5eb;border-radius:10px;padding:14px">
+   <b>Option 2 · Personal Access Token</b><p class="muted">Paste a Deriv PAT created with the permissions you want to grant. Use a trade-enabled token only if you intend to trade.</p>
+   <label for="patInput" style="display:block;font-size:11px;font-weight:700;margin:10px 0 5px">Deriv API token</label>
+   <input id="patInput" type="password" autocomplete="off" placeholder="Paste token here" style="width:100%;padding:11px;border:1px solid #d7e1e7;border-radius:7px">
+   <p class="muted">Token will be used in memory only; do not paste it into chats or share it with anyone.</p>
+   <button class="btn quote" id="patConnect" style="width:100%">Connect token · Setup pending</button>
+  </div>
+  <p class="muted" style="margin:14px 0 0">Connection is not active yet. NovaRank's shared Deriv app registration and secure authentication service must be configured before either method can authenticate.</p>
+ </div>
+</dialog>
+
 <script>
 const WS_URL='wss://api.derivws.com/trading/v1/options/ws/public';
 let ws,markets=[],selectedSymbol='',tickSub=null,prices=[],contracts=[],latestProposal=null;
@@ -54,5 +74,5 @@ function loadContracts(list){contracts=list.filter(c=>c.contract_type);$('contra
 function updateFields(){const t=$('contractSelect').value;$('barrierField').style.display=/HIGHER|LOWER|TOUCH|NOTOUCH|DIGIT(OVER|UNDER|MATCH|DIFF)/.test(t)?'block':'none';$('multiplierField').style.display=/MULT/.test(t)?'block':'none';}
 function requestQuote(){const type=$('contractSelect').value,amount=Number($('stake').value),duration=Number($('duration').value),unit=$('durationUnit').value;if(!selectedSymbol||!type||!(amount>0)||!(duration>0)){toast('Choose a market, available contract, stake and duration.');return}const req={proposal:1,amount,basis:'stake',contract_type:type,currency:$('currency').value,duration,duration_unit:unit,underlying_symbol:selectedSymbol,req_id:20};if($('barrierField').style.display!=='none'){const b=$('barrier').value.trim();if(!b){toast('Enter the barrier or prediction digit required for this contract.');return}req.barrier=b}if($('multiplierField').style.display!=='none')req.multiplier=Number($('multiplier').value);$('quoteOut').style.display='block';$('quoteOut').textContent='Requesting live quote from Deriv…';send(req)}
 function showProposal(p){latestProposal=p;$('quoteOut').style.display='block';$('quoteOut').innerHTML='<b>Deriv quote received</b><br>Stake: '+Number(p.ask_price).toFixed(2)+' '+escapeHtml($('accountMode').value==='Demo account'?'USD':'USD')+'<br>Potential payout: '+Number(p.payout).toFixed(2)+'<br><span class="muted">'+escapeHtml(p.longcode||'Review contract terms before proceeding.')+'</span>';$('stakeSummary').textContent=Number(p.ask_price).toFixed(2);$('payoutSummary').textContent=Number(p.payout).toFixed(2);$('executionMessage').textContent='Quote only. No contract has been purchased.'}
-$('getQuote').onclick=requestQuote;$('contractSelect').onchange=updateFields;$('symbolSelect').onchange=e=>selectMarket(e.target.value);$('marketSearch').oninput=renderMarkets;$('refresh').onclick=()=>{if(ws?.readyState===1)send({active_symbols:'brief',product_type:'basic',req_id:1});else connectPublic()};$('connect').onclick=()=>toast('Account linking is not live yet. We will add Deriv OAuth after secure server-side token handling is ready.');$('accountMode').onchange=()=>{if($('accountMode').value.startsWith('Real')){$('accountMode').value='Demo account';toast('Real-account trading remains locked during development.')}};$('year').textContent=new Date().getFullYear();window.addEventListener('resize',drawChart);connectPublic();
+$('getQuote').onclick=requestQuote;$('contractSelect').onchange=updateFields;$('symbolSelect').onchange=e=>selectMarket(e.target.value);$('marketSearch').oninput=renderMarkets;$('refresh').onclick=()=>{if(ws?.readyState===1)send({active_symbols:'brief',product_type:'basic',req_id:1});else connectPublic()};$('connect').onclick=()=> $('authDialog').showModal();$('closeAuth').onclick=()=> $('authDialog').close();$('patConnect').onclick=()=>{const field=$('patInput');if(!field.value.trim()){toast('Paste your Deriv Personal Access Token first.');return}field.value='';toast('Authentication is not enabled yet. Your token was not submitted or stored.');};$('oauthConnect').onclick=()=>toast('Deriv OAuth is not configured yet. No redirect was started.');$('accountMode').onchange=()=>{if($('accountMode').value.startsWith('Real')){$('accountMode').value='Demo account';toast('Real-account trading remains locked during development.')}};$('year').textContent=new Date().getFullYear();window.addEventListener('resize',drawChart);connectPublic();
 </script></body></html>
