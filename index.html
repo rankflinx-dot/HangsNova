@@ -92,10 +92,10 @@ body[data-view="charts"] .terminal-accountbar,body[data-view="charts"] .terminal
    <b>API connection · Personal Access Token</b><p class="muted">Paste a Deriv PAT created with the permissions you want to grant. Use a trade-enabled token only if you intend to trade.</p>
    <label for="patInput" style="display:block;font-size:11px;font-weight:700;margin:10px 0 5px">Deriv API token</label>
    <input id="patInput" type="password" autocomplete="off" placeholder="Paste token here" style="width:100%;padding:11px;border:1px solid #d7e1e7;border-radius:7px">
-   <p class="muted">The token stays in this tab's memory and is sent directly to Deriv. Never share it.</p>
+   <p class="muted">Sent over HTTPS to NovaRank's authentication service and kept in its private, expiring session store. Never share it.</p>
    <button class="btn quote" id="patConnect" style="width:100%">Connect API token</button>
   </div>
-  <div id="authAccountArea" hidden style="border:1px solid #dce5eb;border-radius:10px;padding:14px;margin-top:12px"><b>Demo account</b><p class="muted">Choose a demo account. NovaRank only reads its balance here.</p><select id="authAccountSelect" style="width:100%;padding:10px;border:1px solid #d7e1e7;border-radius:7px;margin:8px 0"></select><button class="btn quote" id="connectDemoAccount" style="width:100%">Connect demo account</button></div><p class="muted" id="authMessage" style="margin:14px 0 0">OAuth login needs the secure exchange service to be deployed. API token connections are handled directly with Deriv and are not stored by this site.</p>
+  <div id="authAccountArea" hidden style="border:1px solid #dce5eb;border-radius:10px;padding:14px;margin-top:12px"><b>Demo account</b><p class="muted">Choose a demo account. NovaRank only reads its balance here.</p><select id="authAccountSelect" style="width:100%;padding:10px;border:1px solid #d7e1e7;border-radius:7px;margin:8px 0"></select><button class="btn quote" id="connectDemoAccount" style="width:100%">Connect demo account</button></div><p class="muted" id="authMessage" style="margin:14px 0 0">Both login methods need the secure Worker to be deployed. Tokens are kept in its private expiring session store and are never committed to GitHub.</p>
  </div>
 </dialog>
 
