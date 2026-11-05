@@ -2,10 +2,9 @@
   "use strict";
   const cfg = window.NOVARANK_AUTH || {};
   const $ = id => document.getElementById(id);
-  let accessToken = null;
-  let tokenExpiresAt = 0;
+  let sessionId = null;
+  let sessionExpiresAt = 0;
   let authSocket = null;
-  let selectedDemoAccount = null;
 
   function say(message) {
     const node = $("authMessage");
@@ -13,25 +12,43 @@
   }
   function setConnected(label) {
     const node = $("authStatus");
-    if (node) {
-      node.textContent = label;
-      node.style.display = "inline-block";
-    }
+    if (node) { node.textContent = label; node.style.display = "inline-block"; }
     $("connect").style.display = "none";
     $("apiConnection").style.display = "none";
     $("logout").style.display = "inline-block";
   }
-  function encode64(bytes) {
-    return btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  function workerUrl(path) {
+    if (!cfg.tokenExchangeUrl) throw new Error("The secure Deriv connection service is not deployed yet.");
+    const base = cfg.tokenExchangeUrl.replace(/\/(exchange|accounts|otp|pat|logout)\/?$/, "").replace(/\/$/, "");
+    return base + path;
+  }
+  function sessionHeaders() {
+    if (!sessionId || Date.now() >= sessionExpiresAt) throw new Error("Your Deriv session expired. Log in again.");
+    return { Authorization: "Bearer " + sessionId };
+  }
+  async function workerRequest(path, method = "GET", body) {
+    const headers = { ...sessionHeaders() };
+    if (body !== undefined) headers["Content-Type"] = "application/json";
+    const response = await fetch(workerUrl(path), {
+      method,
+      headers,
+      ...(body === undefined ? {} : { body: JSON.stringify(body) })
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.error || "Deriv connection failed (" + response.status + ").");
+    return payload;
   }
   function randomString(size) {
     const bytes = crypto.getRandomValues(new Uint8Array(size));
     const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~";
     return Array.from(bytes, b => alphabet[b % alphabet.length]).join("");
   }
+  function encode64(bytes) {
+    return btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  }
   async function startOAuth() {
-    if (!cfg.clientId) { say("Add the Deriv OAuth App ID in auth-config.js first."); return; }
-    if (!cfg.tokenExchangeUrl) { say("The secure exchange service must be deployed and its URL added to auth-config.js before OAuth login can start."); return; }
+    if (!cfg.clientId) { say("Deriv OAuth App ID is missing."); return; }
+    if (!cfg.tokenExchangeUrl) { say("The secure connection service is being prepared. Set its URL in auth-config.js after deployment."); return; }
     const verifier = randomString(64);
     const challenge = encode64(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier))));
     const state = randomString(32);
@@ -50,24 +67,11 @@
     location.assign(target.href);
   }
   function parseAccounts(payload) {
-    const choices = [payload?.data?.accounts, payload?.data, payload?.accounts, payload?.items];
-    return choices.find(Array.isArray) || [];
+    const candidates = [payload?.data?.accounts, payload?.data, payload?.accounts, payload?.items];
+    return candidates.find(Array.isArray) || [];
   }
-  async function api(path, options = {}) {
-    if (!accessToken || Date.now() >= tokenExpiresAt) throw new Error("Your Deriv session expired. Log in again.");
-    const response = await fetch("https://api.derivws.com" + path, {
-      ...options,
-      headers: {
-        Authorization: "Bearer " + accessToken,
-        ...(options.headers || {})
-      }
-    });
-    const body = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(response.status === 401 ? "Deriv session expired. Log in again." : "Deriv rejected the account request (" + response.status + ").");
-    return body;
-  }
-  async function loadDemoAccounts() {
-    const payload = await api("/trading/v1/options/accounts");
+  async function loadDemoAccounts(accountPayload) {
+    const payload = accountPayload || await workerRequest("/accounts");
     const accounts = parseAccounts(payload);
     const demos = accounts.filter(account => {
       const type = String(account.account_type || account.accountType || account.type || "").toLowerCase();
@@ -77,13 +81,13 @@
     select.textContent = "";
     if (!demos.length) {
       $("authAccountArea").hidden = true;
-      setConnected("Deriv connected · no demo account found");
-      say("Deriv authorized this app, but no demo Options account was returned. No account balance was opened.");
+      setConnected("Deriv connected · no demo account");
+      say("Deriv authorized this app, but no demo Options account was returned. No account was opened.");
       $("authDialog").close();
       return;
     }
     for (const account of demos) {
-      const id = account.account_id || account.id || account.loginid;
+      const id = account.account_id || account.accountId || account.id || account.loginid;
       if (!id) continue;
       const option = document.createElement("option");
       option.value = String(id);
@@ -92,10 +96,10 @@
     }
     if (!select.options.length) throw new Error("Deriv did not return a usable demo account ID.");
     $("authAccountArea").hidden = false;
-    say("Authorized. Select a demo account to read its balance. Orders remain disabled.");
+    say("Authorized. Select a demo account to read its balance. NovaRank does not place orders.");
     if (!$("authDialog").open) $("authDialog").showModal();
   }
-  async function exchangeCode(code) {
+  async function finishOAuth(code) {
     const expectedState = sessionStorage.getItem("novarank_oauth_state");
     const verifier = sessionStorage.getItem("novarank_oauth_verifier");
     const returnedState = new URLSearchParams(location.search).get("state");
@@ -108,17 +112,16 @@
       body: JSON.stringify({ code, code_verifier: verifier, redirect_uri: cfg.redirectUri })
     });
     const payload = await response.json().catch(() => ({}));
-    if (!response.ok || !payload.access_token) throw new Error(payload.error || "Secure token exchange failed.");
-    accessToken = payload.access_token;
-    tokenExpiresAt = Date.now() + Math.max(60, Number(payload.expires_in) || 0) * 1000;
+    if (!response.ok || !payload.session_id) throw new Error(payload.error || "Secure token exchange failed.");
+    sessionId = payload.session_id;
+    sessionExpiresAt = Date.now() + Math.max(60, Number(payload.expires_in) || 3600) * 1000;
     await loadDemoAccounts();
   }
   async function connectBalance() {
-    const accountId = $("authAccountSelect").value;
-    if (!accountId) return;
     try {
       say("Opening a read-only demo account connection…");
-      const result = await api("/trading/v1/options/accounts/" + encodeURIComponent(accountId) + "/otp", { method: "POST" });
+      const accountId = $("authAccountSelect").value;
+      const result = await workerRequest("/otp", "POST", { account_id: accountId });
       const wsUrl = result?.data?.url || result?.url;
       if (!wsUrl || !wsUrl.startsWith("wss://api.derivws.com/")) throw new Error("Deriv did not return a valid account connection URL.");
       if (authSocket) authSocket.close();
@@ -129,11 +132,10 @@
         try { message = JSON.parse(event.data); } catch { return; }
         if (message.error) { say("Account balance could not be read. Please log in again."); return; }
         if (message.msg_type === "balance" && message.balance) {
-          const balance = Number(message.balance.balance);
+          const amount = Number(message.balance.balance);
           const currency = message.balance.currency || "";
-          const account = message.balance.loginid || selectedDemoAccount || accountId;
-          selectedDemoAccount = account;
-          setConnected("Demo · " + account + " · " + balance.toLocaleString(undefined, { maximumFractionDigits: 2 }) + " " + currency);
+          const login = message.balance.loginid || $("authAccountSelect").value;
+          setConnected("Demo · " + login + " · " + amount.toLocaleString(undefined, { maximumFractionDigits: 2 }) + " " + currency);
           say("Read-only demo account connected. NovaRank has not placed any orders.");
           if ($("authDialog").open) $("authDialog").close();
         }
@@ -146,19 +148,21 @@
     const token = field.value.trim();
     field.value = "";
     if (!token) { say("Paste a Deriv Personal Access Token to connect."); return; }
-    if (!cfg.clientId) { say("The Deriv App ID is missing from auth-config.js."); return; }
-    accessToken = token;
-    tokenExpiresAt = Date.now() + 12 * 60 * 60 * 1000;
+    if (!cfg.clientId) { say("The Deriv App ID is missing."); return; }
     try {
-      const response = await fetch("https://api.derivws.com/trading/v1/options/accounts", {
-        headers: { Authorization: "Bearer " + accessToken, "Deriv-App-ID": cfg.clientId }
+      say("Sending token securely to NovaRank's authentication service for validation…");
+      const response = await fetch(workerUrl("/pat"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token })
       });
-      const body = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(response.status === 401 ? "Deriv rejected that token or App ID." : "Deriv rejected the account request (" + response.status + ").");
-      await loadDemoAccounts();
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || !payload.session_id) throw new Error(payload.error || "Deriv rejected that token.");
+      sessionId = payload.session_id;
+      sessionExpiresAt = Date.now() + Math.max(60, Number(payload.expires_in) || 43200) * 1000;
+      await loadDemoAccounts(payload.accounts);
     } catch (error) {
-      accessToken = null;
-      tokenExpiresAt = 0;
+      sessionId = null;
       say(error.message || "Could not connect with that token.");
     }
   }
@@ -167,36 +171,34 @@
     const code = query.get("code");
     const error = query.get("error");
     if (!code && !error) return;
-    const cleanUrl = location.pathname + location.hash;
-    history.replaceState(null, "", cleanUrl);
+    history.replaceState(null, "", location.pathname + location.hash);
     if (error) { say("Deriv sign-in was cancelled or denied. You can try again."); $("authDialog").showModal(); return; }
     try {
       say("Finishing secure Deriv sign-in…");
-      await exchangeCode(code);
+      await finishOAuth(code);
     } catch (issue) {
       say(issue.message || "Could not finish Deriv sign-in.");
       $("authDialog").showModal();
     }
   }
-
   $("oauthConnect").disabled = false;
   $("oauthConnect").textContent = "Continue with Deriv";
   $("oauthConnect").onclick = () => startOAuth().catch(error => say(error.message || "Could not start Deriv sign-in."));
   $("patConnect").onclick = connectPat;
   $("connectDemoAccount").onclick = connectBalance;
   $("apiConnection").onclick = () => { $("authDialog").showModal(); setTimeout(() => $("patInput").focus(), 0); };
-  $("logout").onclick = () => {
-    accessToken = null;
-    tokenExpiresAt = 0;
-    selectedDemoAccount = null;
+  $("logout").onclick = async () => {
     if (authSocket) { authSocket.close(); authSocket = null; }
+    try { if (sessionId) await workerRequest("/logout", "POST", {}); } catch {}
+    sessionId = null;
+    sessionExpiresAt = 0;
     $("authStatus").style.display = "none";
     $("logout").style.display = "none";
     $("connect").style.display = "";
     $("apiConnection").style.display = "";
     $("authAccountArea").hidden = true;
     $("patInput").value = "";
-    say("Disconnected. Tokens are cleared from this tab's memory.");
+    say("Disconnected. This tab's session has been cleared.");
   };
   handleCallback();
 })();
