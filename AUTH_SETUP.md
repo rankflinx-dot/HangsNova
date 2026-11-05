@@ -1,33 +1,34 @@
-# NovaRank Deriv authentication setup
+# NovaRank Deriv authentication deployment
 
-NovaRank is a public web application. Visitors must not need to register their own Deriv applications or supply an App ID.
+The public App ID is already configured in `auth-config.js`. GitHub Pages cannot securely exchange OAuth codes or store account tokens, so NovaRank uses the Worker source in `auth-worker.js`.
 
-## Shared application registration (owner setup, once)
+## Deriv application settings
 
-Register one NovaRank application in the Deriv developer dashboard. Use an OAuth 2.0 application for the browser login flow and configure the exact HTTPS callback URL after the backend is deployed. The resulting client ID / App ID is application configuration, not a per-user field. Keep any client secret exclusively in the backend environment.
+In the Deriv developer dashboard, register an OAuth 2.0 application using:
 
-## User connection choices
+- Redirect URL: `https://rankflinx-dot.github.io/HangsNova/`
+- Scope: `trade`
 
-1. **Login with Deriv (recommended for web):** Authorization Code + PKCE. Generate a fresh verifier and state per login, validate state on callback, exchange the one-time code on the server, and keep access tokens out of URLs and logs.
-2. **Personal Access Token (advanced):** Deriv documents PAT apps for manual token entry and requires the registered app ID on PAT REST requests. Do not persist PATs in localStorage, sessionStorage, cookies, analytics, logs, or Git. Prefer a backend relay that handles a token only in memory for the request/session, or explicitly warn users about the risks of entering a long-lived token into a browser app. Request least-privilege scopes.
+The `trade` permission allows trading at Deriv. NovaRank currently uses the session only to list Options accounts, connect to a demo account, and read its balance; site order execution remains disabled.
 
-## Deployment requirement
+## Deploy the Worker
 
-GitHub Pages only serves static assets. It cannot run the OAuth code exchange or safely hold application secrets. Deploy the authentication API to a serverless/backend host (for example, a Vercel function) and configure HTTPS.
+1. In Cloudflare, create a KV namespace for authentication sessions.
+2. Create a Worker and paste in the contents of `auth-worker.js`.
+3. Add the KV namespace binding named `AUTH_SESSIONS`.
+4. Add these Worker environment variables:
+   - `DERIV_CLIENT_ID` = `34yObA1ud7AlyT1RObT2n`
+   - `DERIV_REDIRECT_URI` = `https://rankflinx-dot.github.io/HangsNova/`
+5. Deploy the Worker and copy its HTTPS URL.
 
-Required backend environment configuration:
-- `DERIV_OAUTH_CLIENT_ID` — public client identifier for the NovaRank OAuth application.
-- `DERIV_OAUTH_CLIENT_SECRET` — only if required by the registered Deriv app / exchange configuration; backend only.
-- `DERIV_OAUTH_REDIRECT_URI` — exact HTTPS callback registered with Deriv.
-- `DERIV_APP_ID` — shared app identifier where required for PAT requests.
+The Worker only accepts requests from NovaRank's GitHub Pages origin. It stores Deriv tokens in the private KV session namespace with an expiration and returns a random session handle to the browser. It does not log tokens.
 
-Never put secrets in `index.html`, GitHub Pages, a public repository, or browser JavaScript.
+## Finish site configuration
 
-## Current implementation status
+In `auth-config.js`, set `tokenExchangeUrl` to your Worker URL plus `/exchange` (example format: `https://your-worker.workers.dev/exchange`). Commit the change so GitHub Pages publishes it.
 
-The account-connect dialog has been added to the static UI with both requested choices. Both actions remain intentionally disabled/pending. No token is transmitted, saved, or logged, and no OAuth redirect is started yet. The backend and shared Deriv app registration must be configured before enabling either option.
+Then **Log in → Continue with Deriv** starts Authorization Code + PKCE. The callback validates state; the Worker exchanges the code and keeps the access token server-side. NovaRank lists demo accounts. Select one to request a short-lived WebSocket URL and read its balance. The session expires automatically; use **Log out** to clear it immediately.
 
-Official references:
-- https://developers.deriv.com/docs/intro/authentication/
-- https://developers.deriv.com/docs/intro/oauth/
-- https://developers.deriv.com/docs/workflows/
+**API connection** accepts an optional Personal Access Token and sends it over HTTPS to the same Worker. The Worker validates it with Deriv and stores it in the private session namespace for up to 12 hours. Use this only if you trust the Worker deployment. Never share tokens in chat or commit them to GitHub.
+
+Official guides: [Deriv OAuth](https://developers.deriv.com/docs/intro/oauth/), [Authentication](https://developers.deriv.com/docs/intro/authentication/), [Options account list](https://developers.deriv.com/docs/options/get-accounts/), [authenticated WebSockets](https://developers.deriv.com/docs/options/websocket/).
