@@ -42,10 +42,10 @@ async function getSession(request, env) {
     return null;
   }
 }
-async function derivFetch(path, session, init = {}) {
+async function derivFetch(path, session, env, init = {}) {
   const headers = new Headers(init.headers || {});
   headers.set("Authorization", "Bearer " + session.token);
-  if (session.isPat) headers.set("Deriv-App-ID", "34yObA1ud7AlyT1RObT2n");
+  if (session.isPat) headers.set("Deriv-App-ID", env.DERIV_CLIENT_ID || "");
   return fetch(API + path, { ...init, headers });
 }
 
@@ -63,7 +63,7 @@ export default {
         "Vary": "Origin"
       }
     });
-    if (!env.AUTH_SESSIONS) return json({ error: "Private session storage is not configured." }, 503, ALLOWED_ORIGIN);
+    if (!env.AUTH_SESSIONS || !env.DERIV_CLIENT_ID || !env.DERIV_REDIRECT_URI) return json({ error: "Private session storage or Deriv app settings are not configured." }, 503, ALLOWED_ORIGIN);
     const url = new URL(request.url);
     try {
       if (url.pathname === "/exchange" && request.method === "POST") {
@@ -107,7 +107,7 @@ export default {
       if (url.pathname === "/accounts" && request.method === "GET") {
         const session = await getSession(request, env);
         if (!session) return json({ error: "Session expired. Log in again." }, 401, ALLOWED_ORIGIN);
-        const response = await derivFetch("/trading/v1/options/accounts", session);
+        const response = await derivFetch("/trading/v1/options/accounts", session, env);
         return new Response(await response.text(), { status: response.status, headers: {
           "Content-Type": "application/json; charset=utf-8",
           "Cache-Control": "no-store",
@@ -122,7 +122,7 @@ export default {
         const input = await request.json();
         const accountId = typeof input.account_id === "string" ? input.account_id : "";
         if (!/^[A-Za-z0-9_-]{4,40}$/.test(accountId)) return json({ error: "Invalid account ID." }, 400, ALLOWED_ORIGIN);
-        const response = await derivFetch("/trading/v1/options/accounts/" + encodeURIComponent(accountId) + "/otp", session, { method: "POST" });
+        const response = await derivFetch("/trading/v1/options/accounts/" + encodeURIComponent(accountId) + "/otp", session, env, { method: "POST" });
         return new Response(await response.text(), { status: response.status, headers: {
           "Content-Type": "application/json; charset=utf-8",
           "Cache-Control": "no-store",
