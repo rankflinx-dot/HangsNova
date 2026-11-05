@@ -48,7 +48,7 @@
   }
   async function startOAuth() {
     if (!cfg.clientId) { say("Deriv OAuth App ID is missing."); return; }
-    if (!cfg.tokenExchangeUrl) { say("The secure connection service is being prepared. Set its URL in auth-config.js after deployment."); return; }
+    if (!cfg.tokenExchangeUrl) { const message = "Deriv login is waiting for the secure Cloudflare Worker to be deployed. Sign in to Cloudflare, deploy the Worker from this project, then its URL can be connected here."; say(message); if (typeof window.toast === "function") window.toast("Deriv login is not active yet: secure Worker setup is required."); return; }
     const verifier = randomString(64);
     const challenge = encode64(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier))));
     const state = randomString(32);
